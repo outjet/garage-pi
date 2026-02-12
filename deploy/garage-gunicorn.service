@@ -1,0 +1,16 @@
+[Unit]
+Description=Gunicorn instance to serve garage door application
+After=network.target
+
+[Service]
+User=outjet
+Group=www-data
+WorkingDirectory=/garage/garage_oauth_project
+Environment="PATH=/garage/garage_oauth_project/garage_env/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+ExecStart=/garage/garage_oauth_project/garage_env/bin/gunicorn --workers 2 --bind 127.0.0.1:8443 app:app
+Restart=always
+RestartSec=5
+SyslogIdentifier=gunicorn_garage
+
+[Install]
+WantedBy=multi-user.target

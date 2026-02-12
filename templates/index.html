@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Garage Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" type="text/css" href="/static/styles.css">
+    <link rel="manifest" href="/static/manifest.json">
+    <meta name="theme-color" content="#1a1a1a">
+</head>
+<body>
+    <main id="app-container">
+        <div id="auth-container">
+            <h1>Garage Control</h1>
+            <p>Please log in to continue.</p>
+            <a href="/login" class="auth-button">Login with Google</a>
+        </div>
+
+        <div id="control-container" style="display: none;">
+            <div id="garage-visualization">
+                <svg id="garage-svg" viewBox="0 0 100 50">
+                    <!-- Garage Frame -->
+                    <rect x="5" y="5" width="90" height="45" fill="#2c2c2c" />
+                    <!-- Garage Door -->
+                    <rect id="svg-garage-door" x="10" y="10" width="80" height="35" fill="#4a4a4a" />
+                </svg>
+            </div>
+            <div id="status-panel">
+                <p>Status: <span id="status-text">Connecting...</span></p>
+            </div>
+            <div id="control-panel">
+                <button id="up-button" class="control-button">Up</button>
+                <button id="down-button" class="control-button">Down</button>
+            </div>
+            <div id="logout-panel">
+                <a href="/logout" class="logout-link">Logout</a>
+            </div>
+        </div>
+    </main>
+    <script src="/static/script.js"></script>
+</body>
+</html>
