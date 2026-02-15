@@ -1,15 +1,16 @@
 
 import os
+
 from flask import Flask, redirect, url_for, session, render_template, jsonify, request
 from google_auth_oauthlib.flow import Flow
 from google.oauth2.credentials import Credentials
 from google.auth.transport.requests import Request, AuthorizedSession
 import requests
-import RPi.GPIO as gpio
 import time
 import threading
 from dotenv import load_dotenv
 import datetime
+import atexit
 
 # Load environment variables
 load_dotenv()
@@ -20,7 +21,6 @@ app.secret_key = os.environ.get("SECRET_KEY")
 app.permanent_session_lifetime = datetime.timedelta(hours=24)
 
 # OAuth 2.0 configuration
-os.environ["OAUTHLIB_INSECURE_TRANSPORT"] = "1"  # Remove in production
 CLIENT_SECRETS_FILE = "client_secret.json"
 SCOPES = ["https://www.googleapis.com/auth/userinfo.email", "https://www.googleapis.com/auth/userinfo.profile", "openid"]
 
@@ -30,21 +30,55 @@ PIN_UP_SENSOR = int(os.getenv('PIN_UP_SENSOR', 21))
 PIN_DOOR_CONTROL = int(os.getenv('PIN_DOOR_CONTROL', 16))
 PIN_BUZZER = int(os.getenv('PIN_BUZZER', 19))
 
-# GPIO setup function
-def setup_gpio():
+
+GPIO_AVAILABLE = False
+try:
+    import RPi.GPIO as gpio
     gpio.setmode(gpio.BCM)
     gpio.setwarnings(False)
     gpio.setup(PIN_DOWN_SENSOR, gpio.IN, pull_up_down=gpio.PUD_UP)
     gpio.setup(PIN_UP_SENSOR, gpio.IN, pull_up_down=gpio.PUD_UP)
     gpio.setup(PIN_DOOR_CONTROL, gpio.OUT)
     gpio.setup(PIN_BUZZER, gpio.OUT)
+    GPIO_AVAILABLE = True
+except (ImportError, RuntimeError):
+    # Mock RPi.GPIO for non-Raspberry Pi environments
+    class MockGPIO:
+        BCM = 11
+        IN = 1
+        OUT = 0
+        PUD_UP = 22
+        LOW = 0
+        HIGH = 1
+
+        def setmode(self, mode):
+            print("GPIO: setmode called")
+
+        def setwarnings(self, flag):
+            print(f"GPIO: setwarnings({flag}) called")
+
+        def setup(self, pin, mode, pull_up_down=None):
+            print(f"GPIO: setup(pin={pin}, mode={mode}, pull_up_down={pull_up_down}) called")
+
+        def output(self, pin, value):
+            print(f"GPIO: output(pin={pin}, value={value}) called")
+
+        def input(self, pin):
+            print(f"GPIO: input(pin={pin}) called")
+            return self.LOW # Assume door is always down or up in mock
+
+        def cleanup(self):
+            print("GPIO: cleanup called")
+
+    gpio = MockGPIO()
+
 
 # Cleanup GPIO resources
 def cleanup_gpio():
-    gpio.cleanup()
+    if GPIO_AVAILABLE:
+        gpio.cleanup()
 
-with app.app_context():
-    setup_gpio()
+atexit.register(cleanup_gpio)
 
 relay_lock = threading.Lock()
 
@@ -55,18 +89,29 @@ def buzz_buzzer():
     activate_gpio_pin(PIN_BUZZER, 0.5)
 
 def activate_gpio_pin(pin, duration):
-    with relay_lock:
-        gpio.output(pin, gpio.HIGH)
-        try:
-            time.sleep(duration)
-        finally:
-            gpio.output(pin, gpio.LOW)
+    if GPIO_AVAILABLE:
+        with relay_lock:
+            gpio.output(pin, gpio.HIGH)
+            try:
+                time.sleep(duration)
+            finally:
+                gpio.output(pin, gpio.LOW)
+    else:
+        print(f"GPIO: Mock activate_gpio_pin(pin={pin}, duration={duration}) called")
 
 def is_door_down():
-    return gpio.input(PIN_DOWN_SENSOR) == gpio.LOW
+    if GPIO_AVAILABLE:
+        return gpio.input(PIN_DOWN_SENSOR) == gpio.LOW
+    else:
+        print("GPIO: Mock is_door_down called, returning True")
+        return True
 
 def is_door_up():
-    return gpio.input(PIN_UP_SENSOR) == gpio.LOW
+    if GPIO_AVAILABLE:
+        return gpio.input(PIN_UP_SENSOR) == gpio.LOW
+    else:
+        print("GPIO: Mock is_door_up called, returning False")
+        return False
 
 from functools import wraps
 
