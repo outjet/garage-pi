@@ -172,7 +172,7 @@ sensor:
     method: GET
     headers:
       X-API-Key: !secret garage_local_api_key
-    value_template: "{{ value_json.status }}"
+    value_template: "{{ value_json.state }}"
 ```
 
 ---

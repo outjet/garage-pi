@@ -147,6 +147,14 @@ def _door_status_value():
     return "in_transition"
 
 
+def _ha_cover_state(raw_status):
+    if raw_status == "up":
+        return "open"
+    if raw_status == "down":
+        return "closed"
+    return "opening"
+
+
 def _parse_cidrs(value):
     cidrs = []
     for raw in value.split(","):
@@ -304,7 +312,8 @@ def local_door_down():
 @app.route("/api/local/door/status", methods=["GET"])
 @local_api_required
 def local_door_status():
-    return jsonify(status=_door_status_value())
+    raw = _door_status_value()
+    return jsonify(state=_ha_cover_state(raw), raw=raw)
 
 # Public status endpoint for LAN devices (no authentication)
 @app.route("/status", methods=["GET"])
