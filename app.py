@@ -1,5 +1,6 @@
 
 import os
+import ipaddress
 
 from flask import Flask, redirect, url_for, session, render_template, jsonify, request
 from google_auth_oauthlib.flow import Flow
@@ -137,6 +138,66 @@ def login_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+
+def _door_status_value():
+    if is_door_down():
+        return "down"
+    if is_door_up():
+        return "up"
+    return "in_transition"
+
+
+def _parse_cidrs(value):
+    cidrs = []
+    for raw in value.split(","):
+        entry = raw.strip()
+        if not entry:
+            continue
+        try:
+            cidrs.append(ipaddress.ip_network(entry, strict=False))
+        except ValueError:
+            print(f"Ignoring invalid LOCAL_API_ALLOWED_CIDR entry: {entry}")
+    return cidrs
+
+
+def _request_ip():
+    raw = request.headers.get("X-Forwarded-For", request.remote_addr or "")
+    candidate = raw.split(",")[0].strip()
+    try:
+        return ipaddress.ip_address(candidate)
+    except ValueError:
+        return None
+
+
+LOCAL_API_KEY = os.getenv("LOCAL_API_KEY", "")
+LOCAL_API_ALLOWED_CIDR = os.getenv(
+    "LOCAL_API_ALLOWED_CIDR",
+    "127.0.0.1/32,::1/128,100.64.0.0/10,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16",
+)
+LOCAL_API_ALLOWED_NETWORKS = _parse_cidrs(LOCAL_API_ALLOWED_CIDR)
+
+
+def local_api_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not LOCAL_API_KEY:
+            return jsonify(error="local_api_not_configured"), 503
+
+        key = request.headers.get("X-API-Key", "")
+        if key != LOCAL_API_KEY:
+            return jsonify(error="unauthorized"), 401
+
+        ip_addr = _request_ip()
+        if ip_addr is None:
+            return jsonify(error="invalid_client_ip"), 403
+
+        if not any(ip_addr in network for network in LOCAL_API_ALLOWED_NETWORKS):
+            return jsonify(error="forbidden_source"), 403
+
+        return f(*args, **kwargs)
+
+    return decorated_function
+
 @app.route("/")
 def index():
     if "credentials" not in session:
@@ -219,10 +280,33 @@ def door_down():
 @app.route("/api/door/status", methods=["GET"])
 @login_required
 def door_status():
+    return jsonify(status=_door_status_value())
+
+
+@app.route("/api/local/door/up", methods=["POST"])
+@local_api_required
+def local_door_up():
+    if is_door_up():
+        return jsonify(status="Door is already up"), 200
+    toggle_door()
+    return jsonify(status="Door is going up"), 200
+
+
+@app.route("/api/local/door/down", methods=["POST"])
+@local_api_required
+def local_door_down():
     if is_door_down():
-        status = "down"
-    elif is_door_up():
-        status = "up"
-    else:
-        status = "in_transition"
-    return jsonify(status=status)
+        return jsonify(status="Door is already down"), 200
+    toggle_door()
+    return jsonify(status="Door is going down"), 200
+
+
+@app.route("/api/local/door/status", methods=["GET"])
+@local_api_required
+def local_door_status():
+    return jsonify(status=_door_status_value())
+
+# Public status endpoint for LAN devices (no authentication)
+@app.route("/status", methods=["GET"])
+def public_status():
+    return jsonify(status=_door_status_value())

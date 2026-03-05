@@ -65,6 +65,10 @@ PIN_DOWN_SENSOR=20
 PIN_UP_SENSOR=21
 PIN_DOOR_CONTROL=16
 PIN_BUZZER=19
+
+LOCAL_API_KEY=replace-with-long-random-key
+# Optional: comma-separated list of CIDRs that can use /api/local/*
+LOCAL_API_ALLOWED_CIDR=127.0.0.1/32,::1/128,100.64.0.0/10,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16
 ```
 
 ---
@@ -135,6 +139,41 @@ Authenticated only:
 | `/api/door/up`     | POST   | Open door         |
 | `/api/door/down`   | POST   | Close door        |
 | `/api/door/status` | GET    | Get current state |
+
+Local API key (for Home Assistant / LAN / Tailscale):
+
+| Endpoint                 | Method | Description                 |
+| ------------------------ | ------ | --------------------------- |
+| `/api/local/door/up`     | POST   | Open door (API key + CIDR)  |
+| `/api/local/door/down`   | POST   | Close door (API key + CIDR) |
+| `/api/local/door/status` | GET    | Get state (API key + CIDR)  |
+| `/status`                | GET    | Public status (no auth)     |
+
+### Home Assistant (REST) example
+
+```yaml
+rest_command:
+  garage_open:
+    url: "https://outgar.duckdns.org:8443/api/local/door/up"
+    method: POST
+    headers:
+      X-API-Key: !secret garage_local_api_key
+
+  garage_close:
+    url: "https://outgar.duckdns.org:8443/api/local/door/down"
+    method: POST
+    headers:
+      X-API-Key: !secret garage_local_api_key
+
+sensor:
+  - platform: rest
+    name: Garage Door API Status
+    resource: "https://outgar.duckdns.org:8443/api/local/door/status"
+    method: GET
+    headers:
+      X-API-Key: !secret garage_local_api_key
+    value_template: "{{ value_json.status }}"
+```
 
 ---
 
